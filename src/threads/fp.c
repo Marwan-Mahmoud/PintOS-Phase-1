@@ -1,6 +1,7 @@
 #include "threads/fp.h"
 #include <stdio.h>
-#define f (1 << 14)
+
+int f = 1 << 14;
 
 real
 int_to_real(int x)
@@ -64,13 +65,13 @@ mul_real_by_int(real x, int y)
 }
 
 real
-div_real_by_real(real x, real y) // returns real x / real y
+div_real_by_real(real x, real y)
 {
     return (((int64_t)x) * f) / y;
 }
 
 real
-div_real_by_int(real x, int y) // returns real x / int y
+div_real_by_int(real x, int y)
 {
     return x / y;
-};
+}

@@ -27,7 +27,7 @@ static unsigned loops_per_tick;
 /* Used as a priority queue such that the
    first element in the list is the first thread to wake up,
    and the second element in the list is the second thread to wake up, and so on. */
-static struct list sleepingThreads;
+static struct list sleeping_threads;
 
 static intr_handler_func timer_interrupt;
 static bool too_many_loops(unsigned loops);
@@ -37,15 +37,17 @@ static void real_time_delay(int64_t num, int32_t denom);
 
 /* Sets up the timer to interrupt TIMER_FREQ times per second,
    and registers the corresponding interrupt. */
-void timer_init(void)
+void
+timer_init(void)
 {
   pit_configure_channel(0, 2, TIMER_FREQ);
   intr_register_ext(0x20, timer_interrupt, "8254 Timer");
-  list_init(&sleepingThreads);
+  list_init(&sleeping_threads);
 }
 
 /* Calibrates loops_per_tick, used to implement brief delays. */
-void timer_calibrate(void)
+void
+timer_calibrate(void)
 {
   unsigned high_bit, test_bit;
 
@@ -90,90 +92,97 @@ timer_elapsed(int64_t then)
 
 /* Sleeps for approximately TICKS timer ticks.  Interrupts must
    be turned on. */
-void timer_sleep(int64_t ticks)
+void
+timer_sleep(int64_t ticks)
 {
   int64_t start = timer_ticks();
-  thread_current()->timeToWakeUp = start + ticks; // Update thread waking up time.
+  thread_current()->time_to_wake_up = start + ticks; // Update thread waking up time.
   ASSERT(intr_get_level() == INTR_ON);
   sleep();
 }
 
-void sleep(void)
+void
+sleep(void)
 {
   enum intr_level old_level;
   old_level = intr_disable();
 
-  list_insert_ordered(&sleepingThreads, &thread_current()->elem, &time_to_wake_up_comparator, NULL);
+  list_insert_ordered(&sleeping_threads, &thread_current()->elem, &time_to_wake_up_comparator, NULL);
   thread_block();
 
   intr_set_level(old_level);
 }
 
 // Less than comparator
-bool time_to_wake_up_comparator(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
+bool
+time_to_wake_up_comparator(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
 {
-  return list_entry(a, struct thread, elem)->timeToWakeUp < list_entry(b, struct thread, elem)->timeToWakeUp;
+  return list_entry(a, struct thread, elem)->time_to_wake_up < list_entry(b, struct thread, elem)->time_to_wake_up;
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
    turned on. */
-void timer_msleep(int64_t ms)
+void
+timer_msleep(int64_t ms)
 {
   real_time_sleep(ms, 1000);
 }
 
 /* Sleeps for approximately US microseconds.  Interrupts must be
    turned on. */
-void timer_usleep(int64_t us)
+void
+timer_usleep(int64_t us)
 {
   real_time_sleep(us, 1000 * 1000);
 }
 
 /* Sleeps for approximately NS nanoseconds.  Interrupts must be
    turned on. */
-void timer_nsleep(int64_t ns)
+void
+timer_nsleep(int64_t ns)
 {
   real_time_sleep(ns, 1000 * 1000 * 1000);
 }
 
 /* Busy-waits for approximately MS milliseconds.  Interrupts need
    not be turned on.
-
    Busy waiting wastes CPU cycles, and busy waiting with
    interrupts off for the interval between timer ticks or longer
    will cause timer ticks to be lost.  Thus, use timer_msleep()
    instead if interrupts are enabled. */
-void timer_mdelay(int64_t ms)
+void
+timer_mdelay(int64_t ms)
 {
   real_time_delay(ms, 1000);
 }
 
 /* Sleeps for approximately US microseconds.  Interrupts need not
    be turned on.
-
    Busy waiting wastes CPU cycles, and busy waiting with
    interrupts off for the interval between timer ticks or longer
    will cause timer ticks to be lost.  Thus, use timer_usleep()
    instead if interrupts are enabled. */
-void timer_udelay(int64_t us)
+void
+timer_udelay(int64_t us)
 {
   real_time_delay(us, 1000 * 1000);
 }
 
 /* Sleeps execution for approximately NS nanoseconds.  Interrupts
    need not be turned on.
-
    Busy waiting wastes CPU cycles, and busy waiting with
    interrupts off for the interval between timer ticks or longer
    will cause timer ticks to be lost.  Thus, use timer_nsleep()
    instead if interrupts are enabled.*/
-void timer_ndelay(int64_t ns)
+void
+timer_ndelay(int64_t ns)
 {
   real_time_delay(ns, 1000 * 1000 * 1000);
 }
 
 /* Prints timer statistics. */
-void timer_print_stats(void)
+void
+timer_print_stats(void)
 {
   printf("Timer: %" PRId64 " ticks\n", timer_ticks());
 }
@@ -188,12 +197,12 @@ timer_interrupt(struct intr_frame *args UNUSED)
   if (thread_mlfqs) // Advanced scheduler
   {
     increment_recent_cpu_for_running_thread();
-    if (timer_ticks() % TIMER_FREQ == 0)  // Every second update recent_cpu and load_avg.
+    if (ticks % TIMER_FREQ == 0)  // Every second update recent_cpu and load_avg.
     { 
       update_load_avg();
       update_recent_cpu_each();
     }
-    if (timer_ticks() % 4 == 0) // Update priority every time slice.
+    if (ticks % 4 == 0) // Update priority every time slice.
     { 
       update_priority();
     }
@@ -202,20 +211,21 @@ timer_interrupt(struct intr_frame *args UNUSED)
   wake_up(); // Wake up threads that slept the specified ticks.
 }
 
-void wake_up(void)
+void
+wake_up(void)
 {
   enum intr_level old_level;
   old_level = intr_disable();
 
-  while (!list_empty(&sleepingThreads))
+  while (!list_empty(&sleeping_threads))
   {
-    struct list_elem *e = list_front(&sleepingThreads);
+    struct list_elem *e = list_front(&sleeping_threads);
     struct thread *t = list_entry(e, struct thread, elem);
 
-    if (t->timeToWakeUp > timer_ticks()) // The first thread in the list has not slept the specified ticks yet.
+    if (t->time_to_wake_up > timer_ticks()) // The first thread in the list has not slept the specified ticks yet.
       break;
 
-    list_pop_front(&sleepingThreads);
+    list_pop_front(&sleeping_threads);
     thread_unblock(t);
   }
 
@@ -243,7 +253,6 @@ too_many_loops(unsigned loops)
 
 /* Iterates through a simple loop LOOPS times, for implementing
    brief delays.
-
    Marked NO_INLINE because code alignment can significantly
    affect timings, so that if this function was inlined
    differently in different places the results would be difficult

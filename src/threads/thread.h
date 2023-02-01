@@ -99,7 +99,7 @@ struct thread
     struct list locksAquired;           /* List of locks that the thread is holding now. */
     struct lock* waiting_lock;          /* Lock that the thread is waiting for. */
     struct list_elem elem;              /* List element. */
-    int timeToWakeUp;                   /* Used when the thread calls sleep functions. */
+    int time_to_wake_up;                   /* Used when the thread calls sleep functions. */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
