@@ -205,20 +205,19 @@ lock_acquire (struct lock *lock)
   {
     struct thread *curr = thread_current();
     curr->waiting_lock = lock;
-    struct thread *tempThread = lock->holder;
+    struct thread *temp_thread = lock->holder;
     for (int i = 0; i < MAX_DEPTH; i++)
     {
-      if (tempThread != NULL)
+      if (temp_thread != NULL)
       {
-        int holderVirtualPriority = tempThread->priority;
-        if (holderVirtualPriority < curr->priority)
+        if (temp_thread->priority < curr->priority)
         {
-          tempThread->priority = curr->priority;
+          temp_thread->priority = curr->priority;
         }
-        struct lock *tempLock = tempThread->waiting_lock;
-        if (tempLock != NULL)
+        struct lock *temp_lock = temp_thread->waiting_lock;
+        if (temp_lock != NULL)
         {
-          tempThread = tempLock->holder;
+          temp_thread = temp_lock->holder;
         }
         else
         {
@@ -278,10 +277,10 @@ lock_release (struct lock *lock)
     list_remove(&lock->lock_elem);
     if (!list_empty(&lock->holder->locks_aquired))
     {
-      int maxPrioOfLocks = lock_highest_priority_waiting(list_entry(list_front(&lock->holder->locks_aquired), struct lock, lock_elem));
-      if (maxPrioOfLocks > lock->holder->org_priority)
+      int locks_max_priority = lock_highest_priority_waiting(list_entry(list_front(&lock->holder->locks_aquired), struct lock, lock_elem));
+      if (locks_max_priority > lock->holder->org_priority)
       {
-        lock->holder->priority = maxPrioOfLocks;
+        lock->holder->priority = locks_max_priority;
       }
       else
       {

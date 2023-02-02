@@ -393,8 +393,10 @@ thread_get_priority (void)
 void
 update_priority()
 {
-  if (thread_current() == idle_thread || !thread_mlfqs)
+  if (thread_current() == idle_thread)
+  {
       return;
+  }
   
   enum intr_level old_level = intr_disable();
 
@@ -449,7 +451,7 @@ update_recent_cpu_each(void)
 // Increments the running thread's recent_cpu by 1 (called every tick).
 void increment_recent_cpu_for_running_thread(void)
 {
-  if (thread_mlfqs && thread_current() != idle_thread)
+  if (thread_current() != idle_thread)
   {
     thread_current()->recent_cpu = add_real_to_int(thread_current()->recent_cpu, 1);
   }
